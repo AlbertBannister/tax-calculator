@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from loguru import logger
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 
 @dataclass
@@ -32,7 +32,9 @@ def calculate_tax(gross_income: Decimal) -> Decimal:
             min(tax_bracket.upper, gross_income) - tax_bracket.lower
         )
         logger.debug(f"Taxable income in bracket: {taxable_income_in_bracket}")
-        calculated_paye_in_bracket = (taxable_income_in_bracket * tax_bracket.tax_rate) / Decimal(100.0)
+        calculated_paye_in_bracket = (
+            taxable_income_in_bracket * tax_bracket.tax_rate
+        ) / Decimal(100.0)
         logger.debug(f"Calculated PAYE: {calculated_paye_in_bracket}")
         total_paye_tax += calculated_paye_in_bracket
 
@@ -40,7 +42,33 @@ def calculate_tax(gross_income: Decimal) -> Decimal:
 
 
 def main():
-    print("Hello from hnry-tax-calculator!")
+    print("Welcome to Albert's tax calculator!")
+    print("Type in your gross yearly income and we'll calculate your PAYE tax")
+    print("Press q at any time to quit")
+    valid_input = False
+    parsed_gross_income: Decimal | None = None
+    while not valid_input:
+        raw_user_input = input("Enter your gross annual income:")
+        if raw_user_input == "q":
+            print("Seeya next time!")
+            return
+
+        try:
+            parsed_gross_income = Decimal(raw_user_input)
+            if parsed_gross_income < 0:
+                print("Income cannot be negative")
+                continue
+            valid_input = True
+        except InvalidOperation:
+            print("Income must be a number")
+            continue
+
+    if parsed_gross_income is None:
+        print("Something went wrong")
+        return
+
+    paye_tax = calculate_tax(parsed_gross_income)
+    print(f"PAYE tax owed: {paye_tax}")
 
 
 if __name__ == "__main__":
