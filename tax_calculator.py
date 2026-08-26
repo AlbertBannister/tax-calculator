@@ -1,21 +1,79 @@
 from dataclasses import dataclass
+from multiprocessing import Value
+from numbers import Number
 from loguru import logger
 from decimal import Decimal, InvalidOperation
+from enum import Enum
+from typing import Any
 
 
-@dataclass
+class NumberIsNegativeError(ValueError):
+    pass
+
+
+class InvalidPercentageError(ValueError):
+    pass
+
+
+@dataclass(frozen=True)
+class PositiveCurrency:
+    value: Decimal
+
+    def __post_init__(self) -> None:
+        if self.value < 0:
+            raise NumberIsNegativeError("Currency quantity must be positive")
+
+    @classmethod
+    def from_any(cls, value: Any):
+        return cls(Decimal(value))
+
+
+@dataclass(frozen=True)
+class Percentage:
+    value: Decimal
+
+    def __post_init__(self) -> None:
+        if self.value < 0:
+            raise NumberIsNegativeError("Percentage must be zero or positive")
+
+        if self.value > 1:
+            raise InvalidPercentageError("Percentage must be under 1")
+
+    @classmethod
+    def from_ratio(cls, ratio: Any):
+        return cls(Decimal(ratio))
+
+    @classmethod
+    def from_percent(cls, percent: Any):
+        ratio = Decimal(percent) / 100
+        return cls(ratio)
+
+
+@dataclass(frozen=True)
 class PAYETaxBracket:
     "Class representing an income tax bracket"
 
-    lower: Decimal
-    upper: Decimal
-    tax_rate: Decimal
+    lower: PositiveCurrency
+    upper: PositiveCurrency
+    tax_rate: Percentage
 
     @classmethod
     def from_numeric(
         cls, lower: float | int, upper: float | int, tax_rate: float | int
     ):
-        return cls(Decimal(lower), Decimal(upper), Decimal(tax_rate))
+        return cls(
+            PositiveCurrency.from_any(lower),
+            PositiveCurrency.from_any(upper),
+            Percentage.from_percent(tax_rate),
+        )
+
+
+class TimePeriod(Enum):
+    DAILY = Decimal(1)
+    WEEKLY = Decimal(7)
+    FORTNIGHTLY = Decimal(14)
+    MONTHLY = Decimal(30)
+    YEARLY = Decimal(365)
 
 
 TAX_BRACKETS = [
@@ -23,31 +81,44 @@ TAX_BRACKETS = [
     for (lower, upper, tax_rate) in [
         (0, 15600, 10.5),
         (15600.0, 53500.0, 17.5),
-        (53500.0, 78100.0, 30.0),
-        (78100.0, 180000.0, 33.0),
-        (180000.0, float("inf"), 39.0),
+        (53500.0, 78100.0, 30),
+        (78100.0, 180000.0, 33),
+        (180000.0, float("inf"), 39),
     ]
 ]
 
 
-def calculate_tax(gross_income: Decimal) -> Decimal:
+def calculate_yearly_income(
+    gross_income: PositiveCurrency, time_period: TimePeriod
+) -> Decimal:
+    logger.info(f"Calculating gross yearly income with {time_period}")
+    gross_yearly_income = (
+        gross_income.value * time_period.value / TimePeriod.YEARLY.value
+    )
+    logger.info(f"Gross yearly income calculated: {gross_yearly_income}")
+    return gross_yearly_income
+
+
+def calculate_tax(
+    gross_income: PositiveCurrency, time_period: TimePeriod = TimePeriod.YEARLY
+) -> Decimal:
     logger.info(f"Calculating PAYE tax for {gross_income}")
-    total_paye_tax: Decimal = Decimal(0.0)
+    total_paye_tax = Decimal(0)
     for tax_bracket in TAX_BRACKETS:
-        if gross_income < tax_bracket.lower:
+        if gross_income.value < tax_bracket.lower.value:
             break
         logger.debug(f"Tax bracket: {tax_bracket}")
         taxable_income_in_bracket = (
-            min(tax_bracket.upper, gross_income) - tax_bracket.lower
+            min(tax_bracket.upper.value, gross_income.value) - tax_bracket.lower.value
         )
         logger.debug(f"Taxable income in bracket: {taxable_income_in_bracket}")
         calculated_paye_in_bracket = (
-            taxable_income_in_bracket * tax_bracket.tax_rate
-        ) / Decimal(100.0)
+            taxable_income_in_bracket * tax_bracket.tax_rate.value
+        )
         logger.debug(f"Calculated PAYE: {calculated_paye_in_bracket}")
         total_paye_tax += calculated_paye_in_bracket
 
-    return total_paye_tax
+    return total_paye_tax.quantize(Decimal(".01"))
 
 
 def main():
@@ -55,7 +126,7 @@ def main():
     print("Type in your gross yearly income and we'll calculate your PAYE tax")
     print("Press q at any time to quit")
     valid_input = False
-    parsed_gross_income: Decimal | None = None
+    parsed_gross_income: PositiveCurrency | None = None
     while not valid_input:
         raw_user_input = input("Enter your gross annual income:")
         if raw_user_input == "q":
@@ -63,14 +134,13 @@ def main():
             return
 
         try:
-            parsed_gross_income = Decimal(raw_user_input)
-            if parsed_gross_income < 0:
-                print("Income cannot be negative")
-                continue
+            parsed_gross_income = PositiveCurrency.from_any(raw_user_input)
             valid_input = True
-        except InvalidOperation:
-            print("Income must be a number")
+        except NumberIsNegativeError:
+            print("Gross income must be positive!")
             continue
+        except InvalidOperation:
+            print("Gross income must be a number")
 
     if parsed_gross_income is None:
         print("Something went wrong")

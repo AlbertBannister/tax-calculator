@@ -1,0 +1,19 @@
+<!-- home.html -->
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <script src="{{ url_for('static', filename='main.js') }}"></script>
+  </head>
+  <body>
+    <h1>Tax Calculatorino</h1>
+    <div id="inputs">
+      <label for="gross-income">Please enter your gross income here: </label>
+      <input type="text" name="gross-income" id="gross-income-input" />
+    </div>
+    <div id="button">
+      <button id="calculate-button">Calculate!</button>
+    </div>
+  </body>
+</html>
