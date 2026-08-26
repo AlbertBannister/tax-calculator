@@ -11,13 +11,22 @@ class PAYETaxBracket:
     upper: Decimal
     tax_rate: Decimal
 
+    @classmethod
+    def from_numeric(
+        cls, lower: float | int, upper: float | int, tax_rate: float | int
+    ):
+        return cls(Decimal(lower), Decimal(upper), Decimal(tax_rate))
+
 
 TAX_BRACKETS = [
-    PAYETaxBracket(Decimal(0), Decimal(15600), Decimal(10.5)),
-    PAYETaxBracket(Decimal(15600.0), Decimal(53500.0), Decimal(17.5)),
-    PAYETaxBracket(Decimal(53500.0), Decimal(78100.0), Decimal(30.0)),
-    PAYETaxBracket(Decimal(78100.0), Decimal(180000.0), Decimal(33.0)),
-    PAYETaxBracket(Decimal(180000.0), Decimal("Infinity"), Decimal(39.0)),
+    PAYETaxBracket.from_numeric(lower, upper, tax_rate)
+    for (lower, upper, tax_rate) in [
+        (0, 15600, 10.5),
+        (15600.0, 53500.0, 17.5),
+        (53500.0, 78100.0, 30.0),
+        (78100.0, 180000.0, 33.0),
+        (180000.0, float("inf"), 39.0),
+    ]
 ]
 
 
