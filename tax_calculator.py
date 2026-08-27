@@ -4,7 +4,7 @@ from numbers import Number
 from loguru import logger
 from decimal import Decimal, InvalidOperation
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 
 class NumberIsNegativeError(ValueError):
@@ -76,7 +76,12 @@ class TimePeriod(Enum):
     YEARLY = Decimal(365)
 
 
-TAX_BRACKETS = [
+class TaxJurisdiction(Enum):
+    NZ = "NZ"
+    AU = "AU"
+
+
+NZ_TAX_BRACKETS = [
     PAYETaxBracket.from_numeric(lower, upper, tax_rate)
     for (lower, upper, tax_rate) in [
         (0, 15600, 10.5),
@@ -86,6 +91,22 @@ TAX_BRACKETS = [
         (180000.0, float("inf"), 39),
     ]
 ]
+
+AUS_TAX_BRACKETS = [
+    PAYETaxBracket.from_numeric(lower, upper, tax_rate)
+    for (lower, upper, tax_rate) in [
+        (0, 18200, 0),
+        (18200, 45000, 16),
+        (45000, 135000, 30),
+        (135000, 190000, 37),
+        (190000.0, float("inf"), 45),
+    ]
+]
+
+TAX_BRACKETS = {
+    TaxJurisdiction.NZ: NZ_TAX_BRACKETS,
+    TaxJurisdiction.AU: AUS_TAX_BRACKETS,
+}
 
 
 def calculate_yearly_income(
@@ -100,11 +121,13 @@ def calculate_yearly_income(
 
 
 def calculate_tax(
-    gross_income: PositiveCurrency, time_period: TimePeriod = TimePeriod.YEARLY
+    gross_income: PositiveCurrency,
+    time_period: TimePeriod = TimePeriod.YEARLY,
+    tax_country: TaxJurisdiction = TaxJurisdiction.NZ,
 ) -> Decimal:
-    logger.info(f"Calculating PAYE tax for {gross_income}")
+    logger.info(f"Calculating PAYE tax for {gross_income} in {tax_country}")
     total_paye_tax = Decimal(0)
-    for tax_bracket in TAX_BRACKETS:
+    for tax_bracket in TAX_BRACKETS[tax_country]:
         if gross_income.value < tax_bracket.lower.value:
             break
         logger.debug(f"Tax bracket: {tax_bracket}")
@@ -146,7 +169,23 @@ def main():
         print("Something went wrong")
         return
 
-    paye_tax = calculate_tax(parsed_gross_income)
+    valid_country = False
+    user_country: TaxJurisdiction | None = None
+
+    while not valid_country:
+        raw_user_country = input("Enter the tax jurisdiction, one of NZ or AU: ")
+
+        try:
+            user_country = TaxJurisdiction[raw_user_country]
+            valid_country = True
+        except KeyError:
+            print("Must be NZ or AU")
+
+    if not user_country:
+        print("Something went wrong")
+        return
+
+    paye_tax = calculate_tax(parsed_gross_income, tax_country=user_country)
     print(f"PAYE tax owed: {paye_tax}")
 
 
